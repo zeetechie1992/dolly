@@ -18,7 +18,7 @@ const THEME_NAMES = { system: 'System', light: 'Light', dark: 'Dark' };
 const FEATURES = [
   { icon: 'zoom-in', tint: 'accent', title: 'Auto zoom', text: 'Smooth, Screen Studio-style zooms that follow the action on screen.' },
   { icon: 'captions', tint: 'orange', title: 'Captions', text: 'Your live transcript becomes captions in six polished styles.' },
-  { icon: 'sparkles', tint: 'purple', title: 'AI summary', text: 'A title, TL;DR, key points and chapters, written for you.' },
+  { icon: 'sparkles', tint: 'purple', title: 'Instant summary', text: 'A title, TL;DR, key points and chapters, written for you.' },
   { icon: 'aspect', tint: 'teal', title: 'Any orientation', text: 'Landscape, portrait or square, ready for every platform.' },
 ];
 
@@ -278,11 +278,11 @@ export function mount(container) {
     };
 
     const hero = h('section', { class: 'home-hero', 'aria-labelledby': 'home-hero-title' },
-      rise(h('div', { class: 'home-eyebrow' }, iconEl('sparkles', 14), 'Auto zoom, captions and AI summaries'), 0),
+      rise(h('div', { class: 'home-eyebrow' }, iconEl('sparkles', 14), 'Auto zoom, captions and instant summaries'), 0),
       rise(h('h1', { class: 'home-hero-title', id: 'home-hero-title' },
         'Record. ', h('span', { class: 'home-hero-accent' }, 'Polish.'), ' Share.'), 70),
       rise(h('p', { class: 'home-hero-sub' },
-        'Capture your screen and camera. Dolly turns it into a polished video with smooth zooms, captions and an AI summary.'), 140),
+        'Capture your screen and camera. Dolly turns it into a polished video with smooth zooms, captions and an instant summary.'), 140),
       rise(h('div', { class: 'home-hero-ctas' },
         h('a', { class: 'btn btn-record btn-xl home-cta', href: '#/record' }, iconEl('record', 16), 'Start recording'),
         h('button', { class: 'btn btn-secondary btn-xl home-cta', type: 'button', onclick: openPicker }, iconEl('upload', 19), 'Import a video')), 210),

@@ -140,7 +140,7 @@ eq(srtAll.split('\n\n').filter(Boolean).length, chunks.length, 'one SRT cue per 
 
 /* ---------------- summary ---------------- */
 
-const { aiStatus, transcriptHash, localSummary, generateSummary, summaryToMarkdown } = await import('../public/js/editor/summary.js');
+const { transcriptHash, localSummary, generateSummary, summaryToMarkdown } = await import('../public/js/editor/summary.js');
 
 const project = { id: 'p_test', title: 'Recording – Oct 6, 10:00', duration: 80, transcript, edit: { trim: { start: 0, end: 80 } }, summary: null };
 
@@ -205,93 +205,20 @@ const trimmedMd = summaryToMarkdown({ ...local, chapters: [{ start: 0, title: 'I
 ok(trimmedMd.includes('- **0:00** Middle') && !trimmedMd.includes('Intro') && !trimmedMd.includes('Late'), 'markdown chapters re-timed to the trim');
 eq(summaryToMarkdown(null, project), '', 'markdown for no summary');
 
-// generateSummary: AI path, fallback, abort
-let mode = 'ai';
-let lastBody = null;
-let duringRequest = null;
-const respond = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
-globalThis.fetch = (url, opts = {}) => {
-  if (url === '/api/status') return Promise.resolve(respond(200, { ai: true, model: 'claude-test' }));
-  if (url === '/api/summarize') {
-    lastBody = JSON.parse(opts.body);
-    if (mode === 'edit') {
-      duringRequest?.();
-      return Promise.resolve(respond(200, { title: 'Edited later', tldr: 'Written from the text that was sent.', key_points: ['One'] }));
-    }
-    if (mode === 'fail') return Promise.resolve(respond(503, { error: 'AI summaries are not configured on the server.' }));
-    if (mode === 'network') return Promise.reject(new TypeError('Failed to fetch'));
-    if (mode === 'garbage') return Promise.resolve(respond(200, ['nope']));
-    if (mode === 'hang') {
-      return new Promise((resolve, reject) => opts.signal.addEventListener('abort', () => reject(opts.signal.reason)));
-    }
-    return Promise.resolve(respond(200, {
-      title: '"Analytics dashboard tour"',
-      tldr: 'A tour of the new analytics dashboard.',
-      key_points: ['Filters by date', '- Filters by date', '  ', '1. CSV export'],
-      action_items: ['- [ ] Fix the timezone bug'],
-      chapters: [{ start: 31, title: 'Export' }, { start: '0:05', title: 'Overview' }, { start: 9999, title: 'After the end' }, { start: 'x', title: 'Bad' }],
-    }));
-  }
-  return Promise.reject(new Error(`unexpected ${url}`));
-};
-
-eq(JSON.stringify(await aiStatus()), JSON.stringify({ ai: true, model: 'claude-test' }), 'aiStatus parses the server status');
-const ai = await generateSummary(project);
-eq(ai.source, 'ai', 'AI source');
-eq(ai.model, 'claude-test', 'AI model');
-eq(ai.title, 'Analytics dashboard tour', 'AI title cleaned');
-eq(JSON.stringify(ai.key_points), JSON.stringify(['Filters by date', 'CSV export']), 'AI key points normalized');
-eq(JSON.stringify(ai.action_items), JSON.stringify(['Fix the timezone bug']), 'AI action items normalized');
-eq(JSON.stringify(ai.chapters), JSON.stringify([{ start: 0, title: 'Overview' }, { start: 31, title: 'Export' }]), 'AI chapters clamped, sorted, first at 0');
-eq(ai.transcriptHash, h1, 'AI summary carries the transcript hash');
-eq(lastBody.segments.length, 9, 'request sends non-empty segments');
-eq(lastBody.duration, 80, 'request sends duration');
-ok(lastBody.segments.every((s) => Object.keys(s).join(',') === 'start,end,text'), 'request segments are {start, end, text}');
-
-for (const m of ['fail', 'network', 'garbage']) {
-  mode = m;
-  const before = warnings.length;
-  const fb = await generateSummary(project);
-  eq(fb.source, 'local', `falls back to local on ${m}`);
-  ok(warnings.length > before, `warns on ${m}`);
-}
-
-// The user edits captions while the AI request is out (generateSummary gets the live project).
-// The summary was written from the old text, so it must keep the old hash; otherwise the panel's
-// "Transcript changed" check and autoSummarize would treat the stale summary as current.
-mode = 'edit';
-const live = { ...project, transcript: transcript.map((s) => ({ ...s })) };
-duringRequest = () => {
-  live.transcript.forEach((s, i) => { s.text = `Refund policy for enterprise billing customers, part ${i + 1}.`; });
-  live.transcript.splice(0, 2);
-};
-const raced = await generateSummary(live);
-duringRequest = null;
-eq(raced.source, 'ai', 'edit during request: AI source');
-eq(lastBody.segments.length, 9, 'edit during request: request built from the original transcript');
-eq(raced.transcriptHash, h1, 'edit during request: AI summary keeps the hash of the text that was sent');
-ok(raced.transcriptHash !== transcriptHash(live.transcript), 'edit during request: summary reads as stale against the edited transcript');
-eq(JSON.stringify(raced.chapters), JSON.stringify(local.chapters), 'edit during request: local fallback pieces come from the sent text');
-ok(JSON.stringify(localSummary(live).chapters) !== JSON.stringify(local.chapters), 'edit during request: the edit really changes the local chapters');
-
-mode = 'hang';
-const ctrl = new AbortController();
-setTimeout(() => ctrl.abort(), 5);
-let abortName = null;
-try { await generateSummary(project, { signal: ctrl.signal }); } catch (err) { abortName = err.name; }
-eq(abortName, 'AbortError', 'caller abort rejects with AbortError');
+// generateSummary: runs locally (never touches the network) and honours abort
+let fetchCalls = 0;
+globalThis.fetch = () => { fetchCalls++; return Promise.reject(new Error('summaries must not use the network')); };
+const gen = await generateSummary(project);
+eq(gen.source, 'local', 'generateSummary is local');
+eq(gen.transcriptHash, h1, 'generated summary carries the transcript hash');
+eq(JSON.stringify(gen.chapters), JSON.stringify(local.chapters), 'generateSummary matches localSummary');
+eq(fetchCalls, 0, 'generateSummary makes no network requests');
 
 const pre = new AbortController();
 pre.abort();
-abortName = null;
+let abortName = null;
 try { await generateSummary(project, { signal: pre.signal }); } catch (err) { abortName = err.name; }
 eq(abortName, 'AbortError', 'already-aborted signal rejects');
-
-mode = 'ai';
-globalThis.fetch = () => Promise.reject(new TypeError('offline'));
-const offline = await aiStatus({ refresh: true });
-eq(JSON.stringify(offline), JSON.stringify({ ai: false, model: null }), 'aiStatus never throws');
-eq((await generateSummary(project)).source, 'local', 'offline → local summary');
 
 log(`\n${passes} passed, ${failures} failed`);
 if (failures) throw new Error(`${failures} self-test failure(s)`);

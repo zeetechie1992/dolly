@@ -1,6 +1,6 @@
 # Dolly
 
-Record your screen and camera, polish the video like Screen Studio, and get captions and an AI summary. It works like Loom.
+Record your screen and camera, polish the video like Screen Studio, and get captions and an automatic summary. It works like Loom, and it needs no accounts or API keys.
 
 **Record → Edit (orientation, background, zooms) → Captions → Summary → Export or Share**
 
@@ -13,20 +13,6 @@ python3 server.py
 ```
 
 Open **http://localhost:8000** in **Chrome** (or Edge or Arc). Recording relies on Chrome's screen capture, live speech recognition and Picture-in-Picture APIs.
-
-### AI summaries (optional)
-
-Without an API key, Dolly writes a basic summary on your machine. To get Claude-written summaries (title, TL;DR, key points, action items and chapters):
-
-```bash
-python3 -m pip install --user anthropic
-```
-
-```bash
-ANTHROPIC_API_KEY=sk-ant-... python3 server.py
-```
-
-The model defaults to `claude-opus-5-5`. To use a different one, set `DOLLY_MODEL`.
 
 ### Settings
 
@@ -41,8 +27,6 @@ All settings are optional environment variables:
 | `DOLLY_SHARE_KEY` | — | A secret (at least 16 characters, for example from `openssl rand -hex 24`) that lets other devices create share links. Once it is set, every browser must enter it to create links, including the one on the computer running Dolly. Without it, only the computer running Dolly can create them. |
 | `DOLLY_TRUST_PROXY` | on inside a container, off otherwise | Whether to believe the `X-Forwarded-For` header from a proxy on a private network address (used to tell visitors apart for rate limits). Set it to `1` when Dolly runs directly on a machine behind a reverse proxy on another host of your network. Set it to `0` when a Docker container is reachable straight from your network (for example Docker Desktop on a laptop) with no proxy in front. A proxy on the same machine (`127.0.0.1`) is always believed. |
 | `DOLLY_MAX_UPLOAD_MB` | `4096` | The largest video a share link can hold. |
-| `ANTHROPIC_API_KEY` | — | Turns on AI summaries. |
-| `DOLLY_MODEL` | `claude-opus-5-5` | The model used for AI summaries. |
 
 When the server starts, it prints the address where share links will work, or tells you they're local-only.
 
@@ -60,7 +44,7 @@ When the server starts, it prints the address where share links will work, or te
   - Undo and redo.
   - Keyboard shortcuts (press `?` to see them).
 - **Captions:** six styles (Minimal, Clean, Bold, Karaoke, Subtitle, Glass). You can edit the transcript and download an .srt file.
-- **Summary:** AI or basic. Chapters are clickable, and you can copy the summary as Markdown.
+- **Summary:** written automatically in your browser from the transcript: title, TL;DR, key points, action items and clickable chapters. Copy it as Markdown.
 - **Export:** MP4 or WebM at 720p, 1080p or 4K, with optional burned-in captions.
 - **Share links:** one click creates a link people can watch in the browser, with the summary, a searchable transcript, styled captions, comments and reactions. Update the video without changing the link, add a password, allow downloads, or embed the player. See "Sharing publicly" below.
 - **Storage:** your recordings stay in your browser (IndexedDB). A share link stores only the rendered video and what you chose to share on the Dolly server.
@@ -104,7 +88,7 @@ Railway builds the included `Dockerfile` straight from your GitHub repository an
    Saving the variables redeploys the service.
 6. Open your domain. Anyone can record, edit and export, all in their own browser. Creating share links asks for your `DOLLY_SHARE_KEY` once per browser, so only you, and the people you give the key to, can publish videos on your server. Anyone with a link can watch it.
 
-Railway charges about $5 a month for a small service with a volume. Leave `ANTHROPIC_API_KEY` unset unless you're fine with visitors running summaries on your key (see "Good to know" below).
+Railway charges about $5 a month for a small service with a volume.
 
 ### Deploy with Docker
 
@@ -141,7 +125,6 @@ For a quick share without a server, you can expose your local Dolly through a tu
 Good to know:
 
 - Link ids are random and can't be guessed, but anyone who has a link can watch it. Add a password in the Share dialog for anything sensitive.
-- If you set `ANTHROPIC_API_KEY` on a public server, anyone who can reach that server can request summaries billed to your key. Leave it unset there, or keep the server private.
 - Server tests: `python3 tools/test_sharing.py`
 
 ## Develop

@@ -396,7 +396,7 @@ function buildEditor(root, { store, player, mainBlob, cameraBlob, onReload }) {
     if (document.activeElement !== titleInput) {
       if (titleInput.value !== title) titleInput.value = title;
     } else if (titleAtFocus !== null && titleInput.value !== title && normTitle(titleInput.value) === normTitle(titleAtFocus)) {
-      // Focused but untouched (e.g. an AI rename landed while the field had focus): show the
+      // Focused but untouched (e.g. an undo/redo changed the title while the field had focus): show the
       // new title right away, keeping a select-all if there was one.
       const allSelected = titleInput.value.length > 0 && titleInput.selectionStart === 0 && titleInput.selectionEnd === titleInput.value.length;
       titleInput.value = title;
@@ -410,7 +410,7 @@ function buildEditor(root, { store, player, mainBlob, cameraBlob, onReload }) {
 
   function commitTitle() {
     // Only an actual edit writes to the store. Otherwise a title that changed while the field
-    // had focus (an AI rename) would be overwritten with the stale text the field still showed.
+    // had focus (e.g. by undo/redo) would be overwritten with the stale text the field still showed.
     const edited = titleAtFocus === null || normTitle(titleInput.value) !== normTitle(titleAtFocus);
     titleAtFocus = null;
     if (titleCancelled) {

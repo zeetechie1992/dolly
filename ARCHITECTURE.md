@@ -4,7 +4,7 @@ Dolly is a Loom-style screen recorder with a Screen Studio-style editor.
 Flow: **Record → Editor (Edit → Captions → Summary) → Export or Share** (share links: see "Sharing" at the end).
 
 - Plain ES modules + CSS, **no build step, no npm, no frameworks, no TypeScript**. Runs in Chrome (primary target), works in Edge/Arc; Safari/Firefox should degrade gracefully (feature-detect, never crash).
-- `python3 server.py` serves `public/` at http://localhost:8000 and provides `/api/status`, `/api/summarize` (Claude) and the share-link routes (`sharing.py`).
+- `python3 server.py` serves `public/` at http://localhost:8000 and provides `/api/status` (health check: `{ ok: true }`) and the share-link routes (`sharing.py`). No API keys or third-party services: summaries are generated in the browser.
 - `python3 tools/check.py` syntax-checks every module (via macOS `jsc`) and verifies that every named import exists. **Run it on every file you touch. It must pass.**
 - All recordings live in the browser (IndexedDB). Nothing is uploaded unless the owner creates a share link: then the rendered video, its poster and the link's metadata go to Dolly's own server (see **Sharing** at the end).
 
@@ -57,7 +57,7 @@ Project = {
   summary: null | Summary,
 }
 Summary = { title, tldr, key_points: string[], action_items: string[], chapters: [{start, title}],
-            source: 'ai' | 'local', model: string|null, generatedAt: ms, transcriptHash: string }
+            source: 'local' (older projects may say 'ai'), model: null, generatedAt: ms, transcriptHash: string }
 ```
 
 **Time:** every time value (playhead, trim, zooms, transcript, chapters) is in **source seconds** (0…duration). Trim only limits playback/export.
@@ -193,10 +193,9 @@ toSRT(chunks) → string; toVTT(chunks) → string
 
 ```js
 // summary.js
-aiStatus() → Promise<{ ai: boolean, model: string|null }>    // GET /api/status, cached; never throws
 transcriptHash(transcript) → string
 localSummary(project) → Summary                     // extractive fallback (no network): title from keywords, tldr = top sentence(s), 3–5 key points, chapters by time buckets; source:'local'
-generateSummary(project, { signal } = {}) → Promise<Summary>   // POST /api/summarize {segments, duration}; on 503/network failure falls back to localSummary; throws only on abort
+generateSummary(project, { signal } = {}) → Promise<Summary>   // async wrapper around localSummary (no network); rejects only with AbortError
 summaryToMarkdown(summary, project) → string
 ```
 
@@ -247,7 +246,7 @@ Each exports a factory returning `{ el, destroy() }`; all take `{ store, player 
 - `panels/design.js` → `createDesignPanel`: **Orientation** (aspect cards from `ASPECTS` with icon + name + hint), **Layout** fit/fill segmented, **Background** swatch grid from `BACKGROUNDS`, **Frame** padding / roundness / shadow sliders + window chrome segmented (None/Light/Dark), **Camera** (only if `source.hasCamera`): show toggle, shape segmented, size slider, mirror toggle, border toggle, corner quick-position buttons; **Zooms** summary: count + "Auto zoom" button (calls `onAutoZoom` option if given) + hint "Press Z to add a zoom at the playhead". Accepts `{ store, player, onAutoZoom, autoZoomJob }`; `autoZoomJob()` returns the run in flight (the shell passes `() => timeline.autoZoomJob`) so a rebuilt panel, or a run started from the timeline toolbar (`store.ui.autoZoomRunning`), shows the button as busy. Also exports `sliderControl` (with `rearm()`), `segmentedControl`, `panelSection`, `formatScale`.
 - `panels/zoom.js` → `createZoomPanel({ store, player, onDelete })` (+ `clearFrameCache()`: frees the source stills shared across panel instances; the shell calls it on unmount, never a panel's own destroy): for the selected zoom: scale slider (1.1–4×), **focus picker** (a mini canvas showing the source frame at the zoom's start with a draggable rectangle representing the zoomed viewport; dragging sets x/y), start/end/duration readout, "Preview zoom" (seek to start & play), Delete, Done (deselect).
 - `panels/captions.js` → `createCaptionsPanel`: enable switch, **style picker** (option cards with `drawCaptionPreview` canvases; 'minimal' first), position segmented, size segmented, **transcript editor** (list of segments with timestamp + editable text; editing updates store with coalesce; click timestamp seeks; delete segment; "Add caption at playhead"); empty state explaining live transcription when transcript is empty. Download .srt button.
-- `panels/summary.js` → `createSummaryPanel` and `autoSummarize(store, { force = false } = {})`: autoSummarize generates when transcript non-empty and (no summary or `transcriptHash` changed or force), driving `store.ui.summaryStatus/summaryError`, then `store.setSummary`; if the title is still the default ("Recording – …"/import filename) and the summary is AI, set `project.title` (history:false). Panel: beautiful summary card (title, TL;DR, key points, action items with checkbox look, chapters list with timestamps that seek the player), source badge ("AI summary · model" or "Basic summary" with hint to set ANTHROPIC_API_KEY), Regenerate, Copy as Markdown, empty state when no transcript, shimmering skeleton while loading.
+- `panels/summary.js` → `createSummaryPanel` and `autoSummarize(store, { force = false } = {})`: autoSummarize generates when transcript non-empty and (no summary or `transcriptHash` changed or force), driving `store.ui.summaryStatus/summaryError`, then `store.setSummary`. Panel: beautiful summary card (title, TL;DR, key points, action items with checkbox look, chapters list with timestamps that seek the player), "Auto summary" badge with generated time, Regenerate, Copy as Markdown, empty state when no transcript, shimmering skeleton while loading.
 
 ### Export — `editor/exporter.js`, `editor/export-dialog.js` (+ `css/export.css`)
 
@@ -269,7 +268,7 @@ openExportDialog({ project, mainBlob, cameraBlob, onShare? }) → void
 
 ### Home — `views/home.js` (+ `css/home.css`)
 
-Frosted nav (logo, search, theme toggle cycling system/light/dark, "Import video", primary "New recording" → `#/record`). Empty library: beautiful hero ("Record. Polish. Share." with gradient text, subcopy, big primary CTA, secondary Import, a row of 4 feature tiles: Auto zoom, Captions, AI summary, Any orientation). With recordings: a short header and a responsive grid of cards (16:9 thumbnail with duration badge, hover play overlay, title, relative date, "…" menu: Open, Rename, Download original, Delete with confirm). Import via file picker and drag-and-drop anywhere (overlay): `probeVideo` → `createProject({ mode: 'import', title: <filename without extension>, ... })` → thumbnail → `createProjectWithMedia` → open editor. Rename uses `patchProject` (never clobbers an editor in another tab). The list refreshes quietly (stamps first via `listProjectStamps`) on `dolly:projects-changed`, `onProjectChange`, and tab return — deferred while a menu, dialog or action is open. **Interrupted recordings:** on mount (and on tab return) `findInterruptedTakes()`; if any, a banner above the library — "A recording was interrupted" with **Discard** (confirm → `discardInterruptedTake`) and **Recover** (`recoverInterruptedTake` → toast with Open, card highlighted). After the first load, `sweepOrphanMedia()` once per page session. Keyboard: R = new recording. Storage usage line at the bottom.
+Frosted nav (logo, search, theme toggle cycling system/light/dark, "Import video", primary "New recording" → `#/record`). Empty library: beautiful hero ("Record. Polish. Share." with gradient text, subcopy, big primary CTA, secondary Import, a row of 4 feature tiles: Auto zoom, Captions, Instant summary, Any orientation). With recordings: a short header and a responsive grid of cards (16:9 thumbnail with duration badge, hover play overlay, title, relative date, "…" menu: Open, Rename, Download original, Delete with confirm). Import via file picker and drag-and-drop anywhere (overlay): `probeVideo` → `createProject({ mode: 'import', title: <filename without extension>, ... })` → thumbnail → `createProjectWithMedia` → open editor. Rename uses `patchProject` (never clobbers an editor in another tab). The list refreshes quietly (stamps first via `listProjectStamps`) on `dolly:projects-changed`, `onProjectChange`, and tab return — deferred while a menu, dialog or action is open. **Interrupted recordings:** on mount (and on tab return) `findInterruptedTakes()`; if any, a banner above the library — "A recording was interrupted" with **Discard** (confirm → `discardInterruptedTake`) and **Recover** (`recoverInterruptedTake` → toast with Open, card highlighted). After the first load, `sweepOrphanMedia()` once per page session. Keyboard: R = new recording. Storage usage line at the bottom.
 
 ### Recording — `views/record.js`, `recorder/recorder.js`, `recorder/transcriber.js`, `recorder/pip.js` (+ `css/record.css`)
 

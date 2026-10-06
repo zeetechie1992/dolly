@@ -4,7 +4,7 @@
 import { h, formatTime, formatRelativeDate, copyText } from '../../lib/util.js';
 import { icon } from '../../lib/icons.js';
 import { toast } from '../../lib/ui.js';
-import { aiStatus, generateSummary, summaryToMarkdown, transcriptHash } from '../summary.js';
+import { generateSummary, summaryToMarkdown, transcriptHash } from '../summary.js';
 
 /* ------------------------------------------------------------------ */
 /* autoSummarize                                                       */
@@ -12,10 +12,6 @@ import { aiStatus, generateSummary, summaryToMarkdown, transcriptHash } from '..
 
 /** store → in-flight run { controller, hash, promise } */
 const runs = new WeakMap();
-
-const DEFAULT_TITLE_RE = /^Recording\s+[–—-]\s/;
-// Typical names of files people import (screen recorders, phones, cameras).
-const FILENAME_TITLE_RE = /^(screen ?recording|screen ?shot|screenshot|screencast|recording|untitled|video|movie|clip|capture|img|vid|pxl|mov|dsc|gopr|loom|kapture|cleanshot|obs|zoom)(\b|[_\-\d\s])/i;
 
 const hasText = (project) => Array.isArray(project?.transcript) && project.transcript.some((s) => String(s?.text ?? '').trim());
 
@@ -25,15 +21,6 @@ function safeHash(transcript) {
 
 function isAbort(err) {
   return err?.name === 'AbortError';
-}
-
-/** True while the title is still the one Dolly picked (or the imported file's name). */
-function isDefaultTitle(project) {
-  const t = String(project?.title ?? '').trim();
-  if (!t) return true;
-  if (DEFAULT_TITLE_RE.test(t)) return true;
-  if (project.mode === 'import') return FILENAME_TITLE_RE.test(t) || (!/\s/.test(t) && /[_\-.\d]/.test(t));
-  return false;
 }
 
 /**
@@ -91,21 +78,6 @@ export function cancelAutoSummarize(store) {
   try { run.controller?.abort(); } catch { /* already settled */ } // stop the request early
 }
 
-/**
- * Renames the project without an undo step, and carries the new title into the history
- * snapshots that still hold the replaced one, so undo/redo of an unrelated edit doesn't
- * bring the old title back. Snapshots holding any other title (one the user typed) are kept.
- */
-function renameUntracked(store, next) {
-  const prev = store.project.title;
-  if (prev === next) return;
-  for (const stack of [store.undoStack, store.redoStack]) {
-    if (!Array.isArray(stack)) continue;
-    for (const snap of stack) if (snap && snap.title === prev) snap.title = next;
-  }
-  store.update((p) => { p.title = next; }, { history: false, reason: 'summary-title' });
-}
-
 async function execute(store, run) {
   const current = () => runs.get(store) === run;
   store.setUI({ summaryStatus: 'loading', summaryError: null });
@@ -115,10 +87,6 @@ async function execute(store, run) {
     if (!result || typeof result !== 'object') throw new Error('The summary came back empty.');
     const summary = { ...result, transcriptHash: result.transcriptHash || run.hash };
     store.setSummary(summary);
-    const title = String(summary.title || '').trim();
-    if (summary.source === 'ai' && title && isDefaultTitle(store.project)) {
-      renameUntracked(store, title.slice(0, 120));
-    }
     store.setUI({ summaryStatus: 'idle', summaryError: null });
     return summary;
   } catch (err) {
@@ -139,21 +107,6 @@ async function execute(store, run) {
 /* Panel                                                               */
 /* ------------------------------------------------------------------ */
 
-/** "claude-sonnet-4-5-20250929" → "Claude Sonnet 4.5"; anything else is shown as-is. */
-function prettyModel(model) {
-  if (!model || typeof model !== 'string') return '';
-  const core = model.trim().replace(/-\d{8}$/, '').replace(/-latest$/, '');
-  if (!/^claude-/i.test(core)) return model.trim();
-  const out = [];
-  for (const part of core.split('-')) {
-    if (!part) continue;
-    const prev = out[out.length - 1];
-    if (/^\d+$/.test(part) && prev && /^\d+(\.\d+)*$/.test(prev)) out[out.length - 1] = `${prev}.${part}`;
-    else out.push(/^\d/.test(part) ? part : part[0].toUpperCase() + part.slice(1));
-  }
-  return out.join(' ');
-}
-
 const strings = (v) => (Array.isArray(v) ? v.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()) : []);
 
 function chaptersOf(summary) {
@@ -173,7 +126,6 @@ export function createSummaryPanel({ store, player = null } = {}) {
   const root = h('div', { class: 'pn pn-summary' });
   const doneItems = new WeakMap();   // summary → Set of checked action-item indexes (visual only)
   const autoTried = new Set();       // transcript hashes this panel already kicked off
-  let ai = null;                     // aiStatus() result once known
   let renderKey = '';
   let chapterRows = [];
   let currentChapter = -1;
@@ -302,22 +254,10 @@ export function createSummaryPanel({ store, player = null } = {}) {
   }
 
   function footerView(summary, has) {
-    const isAI = summary.source === 'ai';
-    const model = prettyModel(summary.model);
-    const badge = isAI
-      ? h('span', { class: 'badge badge-accent pn-sum-badge', title: summary.model || null },
-          h('span', { html: icon('sparkles', 11, { strokeWidth: 2 }) }), model ? `AI · ${model}` : 'AI summary')
-      : h('span', { class: 'badge pn-sum-badge' }, 'Basic summary');
+    const badge = h('span', { class: 'badge pn-sum-badge' }, h('span', { html: icon('sparkles', 11, { strokeWidth: 2 }) }), 'Auto summary');
     const when = Number(summary.generatedAt) > 0 ? h('span', { class: 'pn-sum-meta' }, formatRelativeDate(summary.generatedAt)) : null;
-    let hint = null;
-    if (!isAI) {
-      hint = h('p', { class: 'pn-sum-hint' }, ai?.ai
-        ? 'AI wasn’t reachable for this one. Regenerate to try again.'
-        : 'Set ANTHROPIC_API_KEY on the server for AI summaries');
-    }
     return h('footer', { class: 'pn-sum-footer' },
       h('div', { class: 'pn-sum-source' }, badge, when),
-      hint,
       h('div', { class: 'pn-sum-buttons' },
         h('button', {
           type: 'button',
@@ -347,7 +287,6 @@ export function createSummaryPanel({ store, player = null } = {}) {
       v.has, v.status, v.stale, v.orphan,
       v.summary ? `${v.summary.generatedAt}|${v.summary.title}|${v.summary.source}` : '-',
       v.status === 'error' ? v.error : '',
-      ai ? ai.ai : '?',
     ].join('§');
     if (!force && key === renderKey) return;
     renderKey = key;
@@ -445,15 +384,6 @@ export function createSummaryPanel({ store, player = null } = {}) {
     if (!player && keys.includes('time')) highlightChapter(Number(ui.time) || 0);
   }));
   if (player?.on) offs.push(player.on('time', (t) => { if (!destroyed) highlightChapter(t); }));
-
-  Promise.resolve()
-    .then(() => aiStatus())
-    .then((status) => {
-      if (destroyed || !status) return;
-      ai = status;
-      render();
-    })
-    .catch(() => { /* status is best-effort */ });
 
   return {
     el: root,

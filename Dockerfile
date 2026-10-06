@@ -9,9 +9,6 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Optional: Claude-written summaries when ANTHROPIC_API_KEY is set.
-RUN pip install --no-cache-dir anthropic
-
 COPY . .
 
 ENV DOLLY_HOST=0.0.0.0 \

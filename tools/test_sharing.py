@@ -27,7 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TMP = tempfile.mkdtemp(prefix="dolly-share-test-")
 os.environ["DOLLY_DATA_DIR"] = os.path.join(TMP, "data")
 os.environ["DOLLY_HOST"] = "127.0.0.1"
-for _key in ("DOLLY_PUBLIC_URL", "DOLLY_SHARE_KEY", "DOLLY_MAX_UPLOAD_MB", "DOLLY_TRUST_PROXY", "ANTHROPIC_API_KEY"):
+for _key in ("DOLLY_PUBLIC_URL", "DOLLY_SHARE_KEY", "DOLLY_MAX_UPLOAD_MB", "DOLLY_TRUST_PROXY"):
     os.environ.pop(_key, None)
 sys.path.insert(0, ROOT)
 
@@ -205,9 +205,9 @@ class ShareServerTest(unittest.TestCase):
     def test_existing_api_unchanged(self):
         r = self.request("GET", "/api/status")
         self.assertEqual(r.status, 200)
-        self.assertEqual(r.json, {"ai": False, "model": None})
+        self.assertEqual(r.json, {"ok": True})
         r = self.request("POST", "/api/summarize", json_body={"segments": [{"start": 0, "text": "hi"}], "duration": 1})
-        self.assertEqual(r.status, 503)
+        self.assertEqual(r.status, 404)  # summaries run in the browser; there is no AI endpoint
         r = self.request("GET", "/index.html")
         self.assertEqual(r.status, 200)
         self.assertEqual(r.headers.get("cache-control"), "no-store")

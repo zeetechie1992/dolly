@@ -1,53 +1,13 @@
-// Recording summaries: Claude through the local server when it is configured, otherwise
-// a fast extractive summary computed in the browser. Also Markdown export.
-// Network/DOM access happens only inside functions, so this module loads in a bare JS shell.
+// Recording summaries: a fast extractive summary computed entirely in the browser (no
+// server, no API key), plus Markdown export. No DOM access at import time, so this module
+// loads in a bare JS shell.
 
 import { clamp, formatTime } from '../lib/util.js';
 
-const STATUS_URL = '/api/status';
-const SUMMARIZE_URL = '/api/summarize';
-const STATUS_TIMEOUT_MS = 8000;
-const AI_TIMEOUT_MS = 90000;
 const MAX_POINT_CHARS = 140;
 const MAX_TLDR_CHARS = 280;
 const UNTITLED = 'Untitled recording';
 
-const warn = (...args) => { globalThis.console?.warn?.(...args); };
-
-/* ------------------------------------------------------------------ */
-/* Server status                                                       */
-/* ------------------------------------------------------------------ */
-
-let statusPromise = null;
-
-/**
- * Whether the server can produce AI summaries. Cached; never throws.
- * @param {{ refresh?: boolean }} [opts] refresh re-queries the server
- * @returns {Promise<{ ai: boolean, model: string|null }>}
- */
-export function aiStatus({ refresh = false } = {}) {
-  if (!statusPromise || refresh) statusPromise = fetchStatus();
-  return statusPromise;
-}
-
-async function fetchStatus() {
-  const offline = { ai: false, model: null };
-  if (typeof fetch !== 'function') return offline;
-  const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => ctrl.abort(), STATUS_TIMEOUT_MS) : 0;
-  try {
-    const res = await fetch(STATUS_URL, { headers: { Accept: 'application/json' }, cache: 'no-store', signal: ctrl?.signal });
-    if (!res.ok) return offline;
-    const data = await res.json();
-    const ai = data?.ai === true;
-    const model = ai && typeof data.model === 'string' && data.model.trim() ? data.model.trim() : null;
-    return { ai, model };
-  } catch {
-    return offline;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 /* ------------------------------------------------------------------ */
 /* Transcript helpers                                                  */
@@ -563,182 +523,33 @@ export function localSummary(project) {
 }
 
 /* ------------------------------------------------------------------ */
-/* AI summary                                                          */
+/* Async entry point                                                   */
 /* ------------------------------------------------------------------ */
 
-function namedError(name, message) {
+function abortError(signal) {
+  const reason = signal?.reason;
+  if (reason && reason.name === 'AbortError') return reason;
   try {
-    return new DOMException(message, name);
+    return new DOMException('Summary generation was cancelled.', 'AbortError');
   } catch {
-    const err = new Error(message);
-    err.name = name;
+    const err = new Error('Summary generation was cancelled.');
+    err.name = 'AbortError';
     return err;
   }
 }
 
-function abortError(signal) {
-  const reason = signal?.reason;
-  return reason && reason.name === 'AbortError' ? reason : namedError('AbortError', 'Summary generation was cancelled.');
-}
-
-function throwIfAborted(signal) {
-  if (signal?.aborted) throw abortError(signal);
-}
-
-/** One signal that aborts on the caller's signal or after `ms`. */
-function linkSignals(signal, ms) {
-  if (typeof AbortController !== 'function') return { signal, timedOut: () => false, dispose() {} };
-  const ctrl = new AbortController();
-  let timedOut = false;
-  const onAbort = () => ctrl.abort(signal.reason);
-  if (signal) {
-    if (signal.aborted) onAbort();
-    else signal.addEventListener('abort', onAbort, { once: true });
-  }
-  const timer = setTimeout(() => {
-    timedOut = true;
-    ctrl.abort(namedError('TimeoutError', 'The summary took too long.'));
-  }, ms);
-  return {
-    signal: ctrl.signal,
-    timedOut: () => timedOut,
-    dispose() {
-      clearTimeout(timer);
-      signal?.removeEventListener?.('abort', onAbort);
-    },
-  };
-}
-
-async function requestSummary(body, signal) {
-  const link = linkSignals(signal, AI_TIMEOUT_MS);
-  try {
-    const res = await fetch(SUMMARIZE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-      signal: link.signal,
-    });
-    let data = null;
-    try { data = await res.json(); } catch { data = null; }
-    if (!res.ok) throw new Error(data?.error ? String(data.error) : `Server responded with ${res.status}`);
-    return data;
-  } catch (err) {
-    if (link.timedOut() && !signal?.aborted) throw new Error(`No response after ${AI_TIMEOUT_MS / 1000}s`);
-    throw err;
-  } finally {
-    link.dispose();
-  }
-}
-
-/** "83", 83, "1:23", "01:01:23", "83s", "83.5" → seconds (NaN when unparseable). */
-function parseSeconds(value) {
-  if (typeof value === 'number') return value;
-  if (typeof value !== 'string') return NaN;
-  const v = value.trim().replace(/s$/i, '');
-  if (/^\d+(?::\d{1,2}){1,2}(?:\.\d+)?$/.test(v)) return v.split(':').reduce((acc, part) => acc * 60 + Number(part), 0);
-  return v ? Number(v) : NaN;
-}
-
-const oneLine = (value, max) => {
-  const text = normalizeSpace(typeof value === 'string' ? value : '').replace(/^#+\s*/, '');
-  return max ? truncate(text, max) : text;
-};
-
-function stringList(value, max) {
-  if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const item of value) {
-    const raw = typeof item === 'string' ? item : item && typeof item === 'object' ? item.text ?? item.title ?? '' : '';
-    const text = oneLine(String(raw).replace(/^\s*(?:[-*•]|\d+[.)])?\s*(?:\[[ xX]?\]\s*)?/, ''), 300);
-    if (!text || seen.has(text.toLowerCase())) continue;
-    seen.add(text.toLowerCase());
-    out.push(text);
-    if (out.length >= max) break;
-  }
-  return out;
-}
-
-function normalizeChapters(value, duration) {
-  if (!Array.isArray(value)) return [];
-  const maxT = duration > 0 ? duration : Infinity;
-  const list = value
-    .map((c) => ({ start: parseSeconds(c?.start ?? c?.time ?? c?.timestamp), title: oneLine(c?.title ?? c?.name, 80) }))
-    .filter((c) => c.title && Number.isFinite(c.start))
-    .map((c) => ({ start: round2(clamp(c.start, 0, maxT)), title: c.title }))
-    .sort((a, b) => a.start - b.start);
-  const out = [];
-  for (const c of list) {
-    const prev = out[out.length - 1];
-    if (prev && c.start - prev.start < 1) continue;
-    if (out.length && maxT !== Infinity && c.start > maxT - 1) continue; // a chapter at the very end is useless
-    out.push(c);
-  }
-  if (out.length) out[0].start = 0;
-  return out;
-}
-
-function normalizeAI(raw, duration, project) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const title = oneLine(raw.title, 120).replace(/^["'“]+|["'”]+$/g, '');
-  const tldr = oneLine(raw.tldr ?? raw.tl_dr ?? raw.summary, 800);
-  const key_points = stringList(raw.key_points ?? raw.keyPoints, 8);
-  const action_items = stringList(raw.action_items ?? raw.actionItems, 10);
-  const chapters = normalizeChapters(raw.chapters, duration);
-  if (!title && !tldr && !key_points.length) return null;
-  let fallback = null;
-  const local = () => fallback || (fallback = localSummary(project));
-  return {
-    title: title || local().title,
-    tldr: tldr || local().tldr,
-    key_points,
-    action_items,
-    chapters: chapters.length ? chapters : local().chapters,
-  };
-}
-
 /**
- * Summarizes the project's transcript with Claude when the server supports it, otherwise locally.
- * Falls back to localSummary on any server/network problem; rejects only with an AbortError.
+ * Summarizes the project's transcript in the browser. Async so callers can treat it like
+ * any background job; rejects only with an AbortError.
  * @param {object} project
  * @param {{ signal?: AbortSignal }} [opts]
- * @returns {Promise<object>} Summary
+ * @returns {Promise<object>} Summary (source 'local')
  */
 export async function generateSummary(project, { signal } = {}) {
-  throwIfAborted(signal);
-  // `project` is usually the live store.project, and the user can keep editing captions while
-  // the request is out. Snapshot the transcript before any await so the AI summary (and any
-  // local pieces it borrows) is stamped with the hash of the text that was actually sent; a
-  // later edit then shows up as a hash mismatch (stale summary) instead of being masked.
-  const sent = {
-    ...project,
-    transcript: Array.isArray(project?.transcript) ? project.transcript.map((s) => (s && typeof s === 'object' ? { ...s } : s)) : [],
-  };
-  const sentHash = transcriptHash(sent.transcript);
-  const transcript = cleanTranscript(sent.transcript);
-  if (!transcript.length) return localSummary(project);
-  const status = await aiStatus();
-  throwIfAborted(signal);
-  if (status.ai && typeof fetch === 'function') {
-    const duration = projectDuration(sent, transcript);
-    try {
-      const raw = await requestSummary({
-        segments: transcript.map((s) => ({ start: round2(s.start), end: round2(s.end), text: s.text })),
-        duration: round2(duration),
-      }, signal);
-      throwIfAborted(signal);
-      const summary = normalizeAI(raw, duration, sent);
-      if (summary) {
-        return { ...summary, source: 'ai', model: status.model, generatedAt: Date.now(), transcriptHash: sentHash };
-      }
-      warn('[summary] Unexpected response from /api/summarize; using the basic summary.');
-    } catch (err) {
-      if (signal?.aborted) throw abortError(signal);
-      warn('[summary] AI summary unavailable; using the basic summary.', err?.message || err);
-    }
-  }
-  throwIfAborted(signal);
+  if (signal?.aborted) throw abortError(signal);
+  // Yield once so a caller that starts this during a render doesn't block that frame.
+  await Promise.resolve();
+  if (signal?.aborted) throw abortError(signal);
   return localSummary(project);
 }
 

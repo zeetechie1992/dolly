@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Dolly server: serves the static app, /api/summarize (Claude) and share links.
+"""Dolly server: serves the static app and share links. No API keys needed.
 
 Run:  python3 server.py            (then open http://localhost:8000 in Chrome)
-AI summaries use Claude when the `anthropic` package is installed and
-ANTHROPIC_API_KEY is set; otherwise the browser falls back to a local summary.
-Share links (see sharing.py and README "Sharing publicly") are stored under
-DOLLY_DATA_DIR (default ./data). Bind address: DOLLY_HOST (default 127.0.0.1).
+Summaries are generated in the browser. Share links (see sharing.py and README
+"Sharing publicly") are stored under DOLLY_DATA_DIR (default ./data). Bind address: DOLLY_HOST (default 127.0.0.1).
 """
 from __future__ import annotations
 
@@ -20,71 +18,7 @@ import sharing
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
 HOST = os.environ.get("DOLLY_HOST", "127.0.0.1").strip() or "127.0.0.1"
 PORT = int(os.environ.get("PORT", "8000"))
-MODEL = os.environ.get("DOLLY_MODEL", "claude-opus-5-5")
 SHARING = sharing.ShareService.from_env(ROOT, host=HOST, port=PORT)
-
-try:
-    import anthropic  # type: ignore
-except ImportError:  # pragma: no cover
-    anthropic = None
-
-SUMMARY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "title": {"type": "string"},
-        "tldr": {"type": "string"},
-        "key_points": {"type": "array", "items": {"type": "string"}},
-        "action_items": {"type": "array", "items": {"type": "string"}},
-        "chapters": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "start": {"type": "number"},
-                    "title": {"type": "string"},
-                },
-                "required": ["start", "title"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    "required": ["title", "tldr", "key_points", "action_items", "chapters"],
-    "additionalProperties": False,
-}
-
-PROMPT = """You are summarizing a screen recording (like a Loom video) from its timestamped transcript.
-Write for a teammate who has not watched it yet.
-
-- title: a short, specific title (max 8 words).
-- tldr: 1-2 sentences.
-- key_points: 3-6 concise bullet points.
-- action_items: concrete follow-ups mentioned or implied (empty list if none).
-- chapters: 2-6 chapters; `start` is seconds from the start of the video and must match a transcript timestamp. The first chapter starts at 0.
-
-Video duration: {duration:.0f} seconds.
-
-Transcript (each line is [seconds] text):
-{transcript}"""
-
-
-def ai_available():
-    return anthropic is not None and bool(os.environ.get("ANTHROPIC_API_KEY"))
-
-
-def summarize(segments, duration):
-    lines = "\n".join(f"[{s.get('start', 0):.1f}] {s.get('text', '').strip()}" for s in segments)
-    client = anthropic.Anthropic()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=16000,
-        output_config={"effort": "low", "format": {"type": "json_schema", "schema": SUMMARY_SCHEMA}},
-        messages=[{"role": "user", "content": PROMPT.format(duration=duration, transcript=lines)}],
-    )
-    if response.stop_reason == "refusal":
-        raise RuntimeError("The model declined to summarize this transcript.")
-    text = next(b.text for b in response.content if b.type == "text")
-    return json.loads(text)
-
 
 class Handler(SimpleHTTPRequestHandler):
     server_version = "Dolly"
@@ -150,7 +84,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         self._dolly_allow_framing = False
         if self.path == "/api/status":
-            return self._json(200, {"ai": ai_available(), "model": MODEL if ai_available() else None})
+            return self._json(200, {"ok": True})
         if SHARING.handle(self):
             return None
         return super().do_GET()
@@ -176,27 +110,7 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         if SHARING.handle(self):
             return None
-        if self.path != "/api/summarize":
-            return self._json(404, {"error": "not found"})
-        if not ai_available():
-            return self._json(503, {"error": "AI summaries are not configured on the server."})
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            data = json.loads(self.rfile.read(length) or b"{}")
-            segments = data.get("segments") or []
-            if not segments:
-                return self._json(400, {"error": "Transcript is empty."})
-            return self._json(200, summarize(segments, float(data.get("duration") or 0)))
-        except anthropic.AuthenticationError:
-            return self._json(502, {"error": "Invalid ANTHROPIC_API_KEY."})
-        except anthropic.RateLimitError:
-            return self._json(429, {"error": "Rate limited by the API, try again shortly."})
-        except anthropic.APIStatusError as e:
-            return self._json(502, {"error": f"API error: {e.message}"})
-        except anthropic.APIConnectionError:
-            return self._json(502, {"error": "Could not reach the Claude API."})
-        except Exception as e:  # noqa: BLE001
-            return self._json(500, {"error": str(e)})
+        return self._json(404, {"error": "not found"})
 
 
 class DollyServer(ThreadingHTTPServer):
@@ -223,7 +137,7 @@ def create_server(host: str = HOST, port: int = PORT) -> DollyServer:
 def main():
     httpd = create_server()
     port = httpd.server_address[1]
-    print(f"Dolly running at http://localhost:{port}  (AI summaries: {'on' if ai_available() else 'off'})")
+    print(f"Dolly running at http://localhost:{port}")
     for line in SHARING.startup_lines(port):
         print(line)
     sys.stdout.flush()
