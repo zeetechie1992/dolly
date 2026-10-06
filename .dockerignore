@@ -1,0 +1,10 @@
+# Share storage lives in the /data volume, never in the image.
+data/
+.git/
+.gitignore
+.dockerignore
+.claude/
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
+Dockerfile

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{TITLE}} · Dolly</title>
+  <meta name="description" content="{{DESCRIPTION}}">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="canonical" href="{{URL}}">
+
+  <!-- Link previews (Open Graph / Twitter). The server fills and HTML-escapes every value;
+       empty values (password-protected or not-ready videos) leave the tags inert. -->
+  <meta property="og:site_name" content="Dolly">
+  <meta property="og:type" content="video.other">
+  <meta property="og:title" content="{{TITLE}}">
+  <meta property="og:description" content="{{DESCRIPTION}}">
+  <meta property="og:url" content="{{URL}}">
+  <meta property="og:image" content="{{OG_IMAGE}}">
+  <meta property="og:video" content="{{OG_VIDEO}}">
+  <meta property="og:video:url" content="{{OG_VIDEO}}">
+  <meta property="og:video:type" content="{{OG_VIDEO_TYPE}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{TITLE}}">
+  <meta name="twitter:description" content="{{DESCRIPTION}}">
+  <meta name="twitter:image" content="{{OG_IMAGE}}">
+
+  <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237a78ff'/%3E%3Cstop offset='.45' stop-color='%235e5ce6'/%3E%3Cstop offset='1' stop-color='%23a35bf0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3Ccircle cx='16' cy='16' r='6' fill='white'/%3E%3C/svg%3E">
+  <!-- No third-party font CDN here: viewers of a shared link shouldn't have their IP sent to
+       anyone but this server. The --font stack falls back to the system UI font. -->
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/viewer.css">
+  <link rel="modulepreload" href="/js/share/viewer.js">
+  <link rel="modulepreload" href="/js/share/player.js">
+  <link rel="modulepreload" href="/js/share/api.js">
+  <link rel="modulepreload" href="/js/share/helpers.js">
+  <link rel="modulepreload" href="/js/lib/util.js">
+  <link rel="modulepreload" href="/js/lib/icons.js">
+  <link rel="modulepreload" href="/js/lib/ui.js">
+  <link rel="modulepreload" href="/js/editor/captions.js">
+  <link rel="modulepreload" href="/js/lib/project.js">
+  <script type="module" src="/js/share/viewer.js"></script>
+</head>
+<body class="vw-body" data-share-id="{{SHARE_ID}}" data-mode="{{MODE}}">
+  <div id="vw-root" class="vw-root" aria-busy="true">
+    <!-- Painted before the scripts load; viewer.js replaces it. -->
+    <div class="vw-boot" aria-label="Loading video">
+      <header class="nav vw-nav vw-boot-nav">
+        <a class="logo" href="/" aria-label="Dolly home"><span class="logo-mark"></span>Dolly</a>
+      </header>
+      <div class="vw-boot-main">
+        <div class="vw-boot-primary">
+          <div class="vw-boot-stage skeleton"></div>
+          <div class="vw-boot-line skeleton"></div>
+          <div class="vw-boot-line vw-boot-line-sm skeleton"></div>
+        </div>
+        <div class="vw-boot-side skeleton"></div>
+      </div>
+      <div class="vw-boot-embed"><div class="vw-ring"></div></div>
+    </div>
+  </div>
+  <noscript>
+    <style>.vw-boot { display: none; }</style>
+    <div class="vw-noscript">
+      <strong>Dolly needs JavaScript to play this video.</strong>
+      <p>Turn on JavaScript in your browser settings, then reload the page.</p>
+    </div>
+  </noscript>
+</body>
+</html>

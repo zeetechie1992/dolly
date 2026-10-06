@@ -1,0 +1,187 @@
+/* Dolly design tokens — Apple-inspired, light + dark.
+   Every view stylesheet must use these variables; never hard-code colors. */
+
+:root {
+  color-scheme: light;
+
+  /* Brand */
+  --accent: #5e5ce6;            /* Dolly indigo */
+  --accent-hover: #4f4dd9;
+  --accent-pressed: #4341c4;
+  --accent-soft: rgba(94, 92, 230, 0.12);
+  --accent-softer: rgba(94, 92, 230, 0.07);
+  --accent-contrast: #ffffff;
+  --brand-gradient: linear-gradient(135deg, #7a78ff 0%, #5e5ce6 45%, #a35bf0 100%);
+
+  /* System colors */
+  --red: #ff3b30;
+  --red-soft: rgba(255, 59, 48, 0.12);
+  --orange: #ff9500;
+  --yellow: #ffcc00;
+  --green: #34c759;
+  --green-soft: rgba(52, 199, 89, 0.14);
+  --teal: #30b0c7;
+  --blue: #0a84ff;
+  --purple: #af52de;
+  --pink: #ff2d55;
+
+  /* Surfaces */
+  --bg: #f5f5f7;                /* page */
+  --bg-elevated: #ffffff;       /* cards, panels */
+  --bg-sunken: #ececf0;         /* wells, tracks */
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.07);
+  --material: rgba(255, 255, 255, 0.72);       /* frosted glass */
+  --material-thick: rgba(255, 255, 255, 0.86);
+  --scrim: rgba(0, 0, 0, 0.32);
+  --stage: #e9e9ee;             /* behind the editor preview */
+
+  /* Text */
+  --text: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #a1a1a6;
+  --text-on-dark: #f5f5f7;
+
+  /* Lines */
+  --separator: rgba(0, 0, 0, 0.08);
+  --separator-strong: rgba(0, 0, 0, 0.14);
+  --focus-ring: 0 0 0 4px rgba(94, 92, 230, 0.28);
+
+  /* Editor tracks */
+  --track-zoom: #5e5ce6;
+  --track-zoom-soft: rgba(94, 92, 230, 0.18);
+  --track-caption: #ff9500;
+  --track-caption-soft: rgba(255, 149, 0, 0.18);
+  --playhead: #ff3b30;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-xl: 0 30px 80px rgba(0, 0, 0, 0.22), 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* Shape */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
+  --radius-pill: 999px;
+
+  /* Spacing (4pt grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Type */
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 40px;
+  --text-4xl: 56px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
+  --dur-slow: 420ms;
+
+  /* Layout */
+  --nav-height: 56px;
+  --inspector-width: 340px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --accent: #7d7aff;
+    --accent-hover: #8f8cff;
+    --accent-pressed: #6c69f0;
+    --accent-soft: rgba(125, 122, 255, 0.18);
+    --accent-softer: rgba(125, 122, 255, 0.1);
+    --red: #ff453a;
+    --red-soft: rgba(255, 69, 58, 0.18);
+    --orange: #ff9f0a;
+    --green: #30d158;
+    --green-soft: rgba(48, 209, 88, 0.18);
+    --bg: #000000;
+    --bg-elevated: #1c1c1e;
+    --bg-sunken: #111113;
+    --bg-hover: rgba(255, 255, 255, 0.06);
+    --bg-active: rgba(255, 255, 255, 0.1);
+    --material: rgba(28, 28, 30, 0.72);
+    --material-thick: rgba(28, 28, 30, 0.88);
+    --scrim: rgba(0, 0, 0, 0.55);
+    --stage: #0b0b0d;
+    --text: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --text-tertiary: #6e6e73;
+    --separator: rgba(255, 255, 255, 0.09);
+    --separator-strong: rgba(255, 255, 255, 0.16);
+    --focus-ring: 0 0 0 4px rgba(125, 122, 255, 0.35);
+    --track-zoom: #7d7aff;
+    --track-zoom-soft: rgba(125, 122, 255, 0.24);
+    --track-caption: #ff9f0a;
+    --track-caption-soft: rgba(255, 159, 10, 0.22);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+    --shadow-xl: 0 30px 80px rgba(0, 0, 0, 0.65), 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --accent: #7d7aff;
+  --accent-hover: #8f8cff;
+  --accent-pressed: #6c69f0;
+  --accent-soft: rgba(125, 122, 255, 0.18);
+  --accent-softer: rgba(125, 122, 255, 0.1);
+  --red: #ff453a;
+  --red-soft: rgba(255, 69, 58, 0.18);
+  --orange: #ff9f0a;
+  --green: #30d158;
+  --green-soft: rgba(48, 209, 88, 0.18);
+  --bg: #000000;
+  --bg-elevated: #1c1c1e;
+  --bg-sunken: #111113;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --material: rgba(28, 28, 30, 0.72);
+  --material-thick: rgba(28, 28, 30, 0.88);
+  --scrim: rgba(0, 0, 0, 0.55);
+  --stage: #0b0b0d;
+  --text: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #6e6e73;
+  --separator: rgba(255, 255, 255, 0.09);
+  --separator-strong: rgba(255, 255, 255, 0.16);
+  --focus-ring: 0 0 0 4px rgba(125, 122, 255, 0.35);
+  --track-zoom: #7d7aff;
+  --track-zoom-soft: rgba(125, 122, 255, 0.24);
+  --track-caption: #ff9f0a;
+  --track-caption-soft: rgba(255, 159, 10, 0.22);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-xl: 0 30px 80px rgba(0, 0, 0, 0.65), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
