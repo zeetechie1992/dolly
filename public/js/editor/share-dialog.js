@@ -377,6 +377,17 @@ export function openShareDialog({ store, mainBlob, cameraBlob = null, onClose } 
       owner = v;
       elsewhere = other;
       ownerError = null;
+      // The server is the source of truth for the link's address: it changes when
+      // DOLLY_PUBLIC_URL is set or fixed after the link was created.
+      const fresh = typeof v?.url === 'string' && /^https?:\/\//.test(v.url) ? v.url : '';
+      const freshEmbed = typeof v?.embedUrl === 'string' && /^https?:\/\//.test(v.embedUrl) ? v.embedUrl : '';
+      if ((fresh && fresh !== s.url) || (freshEmbed && freshEmbed !== s.embedUrl)) {
+        await persistShare(projectId, s.id, (sh) => {
+          if (fresh) sh.url = fresh;
+          if (freshEmbed) sh.embedUrl = freshEmbed;
+        });
+        if (closed || seq !== ownerSeq || share()?.id !== s.id) return;
+      }
     } catch (err) {
       if (closed || seq !== ownerSeq || share()?.id !== s.id) return;
       if (isGoneReply(err)) {
@@ -1044,6 +1055,10 @@ export function openShareDialog({ store, mainBlob, cameraBlob = null, onClose } 
 
     function syncFromOwner() {
       const s = share();
+      if (s.url && linkInput.value !== s.url) {
+        linkInput.value = s.url;
+        openBtn.href = s.url;
+      }
       createdEl.textContent = `Created ${formatRelativeDate(num(owner?.createdAt, 0) || s.createdAt || Date.now())}`;
       const layout = owner?.layout?.width && owner?.layout?.height ? owner.layout : shareLayout(project());
       embedCode.textContent = embedSnippet(s.embedUrl || s.url.replace(/\/s\//, '/embed/'), layout.width, layout.height, owner?.title || project().title);
